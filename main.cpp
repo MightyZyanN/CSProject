@@ -80,7 +80,7 @@ class Player
 
             if (cash >= itemprice)
             {
-                cash -= itemprice
+                cash -= itemprice;
             }
         }
 
