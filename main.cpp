@@ -60,16 +60,28 @@ class Player
 
         void removeInventoryItem(int itemnumber)
         {
-            for (int i = 0; i < inventorysize; i++)
+            for (int i = itemnumber; i < inventorysize; i++)
             {
                 inventoryarray[i] = inventoryarray[i + 1];
             }
+            inventorysize--;
         
         }
 
         string getInventoryItem(int itemnumber)
         {
             return inventoryarray[itemnumber];
+        }
+
+        bool buyFoodItem(Eatery &eatery, int itemnumber)
+        {
+            
+            double itemprice = stod(eatery.getMenuItemPrice(itemnumber));
+
+            if (cash >= itemprice)
+            {
+                cash -= itemprice
+            }
         }
 
         void printStats()
@@ -190,7 +202,7 @@ class Game
 
         while (run)
             {
-                validateInput(input, "Which Location Do You Want To Go To", "Invalid Location", locationarray, 3, true, false, -19);
+                validateInput(input, "Which Location Do You Want To Go To", "Invalid Location", locationarray, LOCATIONARRAYLENGTH, true, false, -19);
 
                 for (int i = 0; i < LOCATIONARRAYLENGTH; i++)
                 {
@@ -438,6 +450,5 @@ int main()
     pdc.addMenuItem("Biryani", 500);
 
     gameLoop(player);
-
 
 }
