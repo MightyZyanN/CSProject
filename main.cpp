@@ -20,17 +20,24 @@ class Player
         string name;
         string gender;
         string school;
-        int cash;
-        int gpa;
-        int social;
-        string location;
+        double cash = 1000.0;
+        float gpa = 4.0f;
+        string location = "ENTRANCE";
+
+        int inventorysize = 0;
+        string inventoryarray[100] = {};
 
     public:
-        Player(string name_val, string genderval, string schoolval)
+        Player(string nameval, string genderval, string schoolval)
         {
-            name = name_val;
+            name = nameval;
             gender = genderval;
             school = schoolval;
+        }
+
+        double getCash()
+        {
+            return cash;
         }
 
         string getLocation()
@@ -38,11 +45,31 @@ class Player
             return location;
         }
 
-        string setLocation(string location_val)
+        string setLocation(string locationval)
         {
-            location = location_val;
+            location = locationval;
 
             return location;
+        }
+
+        void addInventoryItem(string item)
+        {
+            inventoryarray[inventorysize] = item;
+            inventorysize++;
+        }
+
+        void removeInventoryItem(int itemnumber)
+        {
+            for (int i = 0; i < inventorysize; i++)
+            {
+                inventoryarray[i] = inventoryarray[i + 1];
+            }
+        
+        }
+
+        string getInventoryItem(int itemnumber)
+        {
+            return inventoryarray[itemnumber];
         }
 
         void printStats()
@@ -62,23 +89,60 @@ class School
         int location;
 
     public:
-        School(string name_val, int location_val)
+        School(string nameval, int locationval)
         {
-            name = name_val;
-            location = location_val;
+            name = nameval;
+            location = locationval;
         }
 
 };
 
-class Input
+class Eatery
+{
+    private:
+        string name;
+        int location;
+
+        string menuarray[100][2] = {};
+
+        int menusize = 0;
+
+    public:
+        Eatery(string nameval, int locationval)
+        {
+            name = nameval;
+            location = locationval;
+        }
+
+    void addMenuItem(string item, double price)
+    {
+        menuarray[menusize][0] = item;
+        menuarray[menusize][1] = price;
+        menusize++;
+    }
+
+    string getMenuItemName(int menuitem)
+    {
+        return menuarray[menuitem][0];
+    }
+
+    string getMenuItemPrice(int menuitem)
+    {
+        return menuarray[menuitem][1];
+    }
+    
+};
+
+class Game
 {
     private:
         string type;
+        int day = 0;
 
     public:
-        Input(string type_val)
+        Game()
         {
-            type = type_val;
+            
         }
 
     string takeInput(Player &player)
@@ -116,13 +180,13 @@ class Input
 
     void inputLocation(Player &player)
     {
-        const int LOCATIONARRAYLENGTH = 3;
+        const int LOCATIONARRAYLENGTH = 5;
 
         string input;
 
         bool run = true;
 
-        string locationarray[LOCATIONARRAYLENGTH] = {"SSE", "SDSB", "BACK"};
+        string locationarray[LOCATIONARRAYLENGTH] = {"ENTRANCE", "SSE", "SDSB", "PDC", "BACK"};
 
         while (run)
             {
@@ -313,8 +377,6 @@ void validateInput(string &input, string prompttext, string invalidprompttext, s
 
 }
 
-
-
 int gameStart(string game_info[], int s)
 {
     string name;
@@ -354,7 +416,7 @@ int gameStart(string game_info[], int s)
 
 int gameLoop(Player &player)
 {
-    Input input = Input("");
+    Game input = Game();
 
     input.takeInput(player);
 
@@ -369,7 +431,11 @@ int main()
     Player player = Player(game_info[0], game_info[1], game_info[2]);
 
     School sse = School("SSE", 0);
-    School sdsb = School("SDSB", 0);
+    School sdsb = School("SDSB", 1);
+
+    Eatery pdc = Eatery("PDC", 2);
+
+    pdc.addMenuItem("Biryani", 500);
 
     gameLoop(player);
 
