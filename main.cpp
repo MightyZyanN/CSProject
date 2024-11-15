@@ -1,10 +1,16 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
+#include <vector>
+#include <algorithm>
 #include <cctype>
 #include <windows.h>
 #include <mmsystem.h>
 using namespace std;
+
+class Player;
+class School;
+class Eatery;
 
 int getConsoleWidth();
 
@@ -13,6 +19,56 @@ void positionText(const string &text, bool center, bool nextline, bool typeText,
 void validateInput(string &input, string prompttext, string invalidprompttext, int min, int max, bool typetext, int offset);
 
 void validateInput(string &input, string prompttext, string invalidprompttext, string str_array[], int str_array_s, bool upper, bool typetext, int offset);
+
+void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize);
+
+
+class Eatery
+{
+    private:
+        string name;
+        int location;
+
+        vector<vector<string>> menuarray;
+        int menusize;
+
+    public:
+        Eatery(string nameval, int locationval)
+        {
+            name = nameval;
+            location = locationval;
+        }
+
+        void atEatery(Player &player);
+
+        string getName()
+        {
+            return name;
+        }
+
+        void addMenuItem(string itemname, string itemprice)
+        {
+            vector<string> oneitem = {itemname, itemprice};
+            menuarray.push_back(oneitem);
+            menusize = menuarray.size();
+        }
+
+        int getMenuSize()
+        {
+            return menusize;
+        }
+
+        string getMenuItemName(int menuitem)
+        {
+            return menuarray[menuitem][0];
+        }
+
+        string getMenuItemPrice(int menuitem)
+        {
+            return menuarray[menuitem][1];
+        }
+
+};
 
 class Player
 {
@@ -24,8 +80,7 @@ class Player
         float gpa = 4.0f;
         string location = "ENTRANCE";
 
-        int inventorysize = 0;
-        string inventoryarray[100] = {};
+        vector<string> inventoryarray;
 
     public:
         Player(string nameval, string genderval, string schoolval)
@@ -34,6 +89,8 @@ class Player
             gender = genderval;
             school = schoolval;
         }
+
+        bool buyFoodItem(Eatery &eatery, string itemname);
 
         double getCash()
         {
@@ -52,20 +109,18 @@ class Player
             return location;
         }
 
-        void addInventoryItem(string item)
+        void addInventoryItem(const string &item)
         {
-            inventoryarray[inventorysize] = item;
-            inventorysize++;
+            inventoryarray.push_back(item);
         }
 
-        void removeInventoryItem(int itemnumber)
+        void removeInventoryItem(const string &item)
         {
-            for (int i = itemnumber; i < inventorysize; i++)
+            auto it = find(inventoryarray.begin(), inventoryarray.end(), item);
+            if (it != inventoryarray.end())
             {
-                inventoryarray[i] = inventoryarray[i + 1];
+                inventoryarray.erase(it);
             }
-            inventorysize--;
-        
         }
 
         string getInventoryItem(int itemnumber)
@@ -73,23 +128,31 @@ class Player
             return inventoryarray[itemnumber];
         }
 
-        bool buyFoodItem(Eatery &eatery, int itemnumber)
-        {
-            
-            double itemprice = stod(eatery.getMenuItemPrice(itemnumber));
-
-            if (cash >= itemprice)
-            {
-                cash -= itemprice;
-            }
-        }
-
         void printStats()
         {
             positionText(name, false, true, false, -19);
             positionText(gender, false, true, false, -19);
             positionText(location, false, true, false, -19);
+
+            positionText(to_string(cash), false, true, false, -19);
             // positionText(name, false, true, false, -19);
+
+            printInventory();
+
+        
+
+        }
+
+        void printInventory()
+        {
+            positionText("Inventory", false, true, false, -19);
+            positionText("", false, false, false, -19);
+            for (int i = 0; i < inventoryarray.size(); i++)
+            {   
+                cout << inventoryarray[i] << " ";
+            }
+            cout << endl;
+
         }   
 
 };
@@ -107,125 +170,210 @@ class School
             location = locationval;
         }
 
-};
-
-class Eatery
-{
-    private:
-        string name;
-        int location;
-
-        string menuarray[100][2] = {};
-
-        int menusize = 0;
-
-    public:
-        Eatery(string nameval, int locationval)
+        string getName()
         {
-            name = nameval;
-            location = locationval;
+            return name;
         }
 
-    void addMenuItem(string item, double price)
-    {
-        menuarray[menusize][0] = item;
-        menuarray[menusize][1] = price;
-        menusize++;
+        void atSchool()
+        {
+            string text = "At " + name;
+            positionText(text, false, true, false, -19);
+        }
+
+};
+
+void Eatery::atEatery(Player &player)
+{
+    bool run = true;
+    string input;
+
+    string text;
+
+    text = "At " + name;
+
+    positionText(text, false, true, false, -19);
+
+    vector<string> menuarray1d(menusize);
+
+    for (int i = 0; i < menusize; i++) {
+        menuarray1d[i] = menuarray[i][0];
     }
 
-    string getMenuItemName(int menuitem)
+    while (run)
     {
-        return menuarray[menuitem][0];
+        validateInput(input, "What Do You Want To Eat", "Invalid Item. What Do You Want To Eat", menuarray1d.data(), menusize, true, false, -19);
+
+        for (int i = 0; i < menusize; i++)
+        {
+
+            if (input == menuarray1d[menusize - 1])
+            {
+                run = false;
+                break;
+            }
+            else
+            {
+                player.buyFoodItem(*this, input);
+                string text = "Buying " + input;
+                positionText(text, false, true, false, -19);
+                run = false;
+                break;
+            }
+        
+        }
     }
 
-    string getMenuItemPrice(int menuitem)
-    {
-        return menuarray[menuitem][1];
-    }
+}
+
+bool Player::buyFoodItem(Eatery &eatery, string itemname)
+        {
+            int menusize = eatery.getMenuSize();
+            double menuitemprice = 0.0;
+
+            for (int i = 0; i < menusize; i++)
+            {
+                if (itemname == eatery.getMenuItemName(i))
+                {
+                    menuitemprice = stod(eatery.getMenuItemPrice(i));
+                    if (cash >= menuitemprice)
+                    {
+                        addInventoryItem(eatery.getMenuItemName(i));
+                        cash -= menuitemprice;
+                    }
+                    return true;
+                }
+            }
+        return false;
+}
     
-};
-
-class Game
+string takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize)
 {
-    private:
-        string type;
-        int day = 0;
 
-    public:
-        Game()
-        {
-            
-        }
+    const int INPUTARRAYLENGTH = 3;
 
-    string takeInput(Player &player)
+    string input;
+
+    bool run = true;
+
+    string inputarray[INPUTARRAYLENGTH] = {"LOCATION", "STATS", "ENDDAY"};
+
+    while (run)
     {
+        validateInput(input, "What's Your Move", "Invalid Move. What's Your Move", inputarray, 3, true, false, -19);
 
-        const int INPUTARRAYLENGTH = 2;
-
-        string input;
-
-        string inputarray[INPUTARRAYLENGTH] = {"LOCATION", "STATS"};
-
-        while (true)
+        for (int i = 0; i < INPUTARRAYLENGTH; i++)
         {
-            validateInput(input, "What's Your Move", "Invalid Move. What's Your Move", inputarray, 3, true, false, -19);
-
-            for (int i = 0; i < INPUTARRAYLENGTH; i++)
+            if (input == inputarray[INPUTARRAYLENGTH - 1])
+            {
+                run = false;
+                break;
+            }
+            else
             {
                 if (input == inputarray[0])
                 {
-                    inputLocation(player);
+                    inputLocation(player, schoolarray, schoolarraysize, eateryarray, eateryarraysize);
                 }
                 else if (input == inputarray[1])
                 {
                     player.printStats();
                 }
                 break;
-
             }
 
         }
 
-        return input;
-
     }
 
-    void inputLocation(Player &player)
+    return input;
+
+}
+
+void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize)
+{
+    const int INPUTARRAYLENGTH = 5;
+
+    string input;
+
+    bool run = true;
+
+    bool printtext = true;
+
+    string inputarray[INPUTARRAYLENGTH][2] = 
     {
-        const int LOCATIONARRAYLENGTH = 5;
+    {"ENTRANCE", ""}, 
+    {"SSE", "SCHOOL"}, 
+    {"SDSB", "SCHOOL"},
+    {"PDC", "EATERY"},
+    {"BACK", ""}
+    };
 
-        string input;
+    string inputarray1d[INPUTARRAYLENGTH];
 
-        bool run = true;
+    for (int i = 0; i < INPUTARRAYLENGTH; i++)
+    {
+        inputarray1d[i] = inputarray[i][0];
+    }
+    
 
-        string locationarray[LOCATIONARRAYLENGTH] = {"ENTRANCE", "SSE", "SDSB", "PDC", "BACK"};
+    while (run)
+    {
+        printtext = true;
 
-        while (run)
+        validateInput(input, "Which Location Do You Want To Go To", "Invalid Location", inputarray1d, INPUTARRAYLENGTH, true, false, -19);
+
+        for (int i = 0; i < INPUTARRAYLENGTH; i++)
+        {
+
+            if (input == inputarray[INPUTARRAYLENGTH - 1][0])
             {
-                validateInput(input, "Which Location Do You Want To Go To", "Invalid Location", locationarray, LOCATIONARRAYLENGTH, true, false, -19);
-
-                for (int i = 0; i < LOCATIONARRAYLENGTH; i++)
+                run = false;
+                break;
+            }
+            else
+            {
+                if (printtext)
                 {
-                    if (input == locationarray[LOCATIONARRAYLENGTH - 1])
+                    printtext = false;
+                    player.setLocation(input);
+                    string text = "Moving to " + input;
+                    positionText(text, false, true, false, -19);
+                }
+                if (inputarray[i][1] == "SCHOOL")
+                {
+                    for (int j = 0; j < schoolarraysize; j++)
                     {
-                        run = false;
-                        break;
-                    }
-                    else
-                    {
-                        player.setLocation(input);
-                        string text = "Moving to " + input;
-                        positionText(text, false, true, false, -19);
-                        run = false;
-                        break;
+                        if (input == schoolarray[j] -> getName())
+                        {
+                            schoolarray[j] -> atSchool();
+                            run = false;
+                            break;
+                        }
                     }
                 }
-
+                else if (inputarray[i][1] == "EATERY")
+                {
+                    for (int j = 0; j < eateryarraysize; j++)
+                    {
+                        if (input == eateryarray[j] -> getName())
+                        {
+                            eateryarray[j] -> atEatery(player);
+                            run = false;
+                            break;
+                        }
+                    }
+                }
+                if (!run)
+                {
+                    break;
+                }
             }
+        }
     }
+}
 
 
-};
 
 int getConsoleWidth()
 {
@@ -426,13 +574,20 @@ int gameStart(string game_info[], int s)
     return 1;
 }
 
-int gameLoop(Player &player)
+void gameLoop(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize)
 {
-    Game input = Game();
+    const int semesterduration = 40;
 
-    input.takeInput(player);
+    for (int i = 1; i <= semesterduration; i++)
+    {
+        string text = "Day " + to_string(i);
+        positionText(text, false, true, false, -19);
+        player.printStats();
+    
+        takeInput(player, schoolarray, 2, eateryarray, 1);
+    }
 
-    return 1;
+
 }
 
 int main()
@@ -445,10 +600,24 @@ int main()
     School sse = School("SSE", 0);
     School sdsb = School("SDSB", 1);
 
+    School *schoolarray[2] = {&sse, &sdsb};
+
     Eatery pdc = Eatery("PDC", 2);
 
-    pdc.addMenuItem("Biryani", 500);
+    Eatery *eateryarray[] = {&pdc};
 
-    gameLoop(player);
+    pdc.addMenuItem("BIRYANI", "500");
+
+    pdc.addMenuItem("WAFFLE", "190");
+
+    pdc.addMenuItem("PARATHA", "300");
+
+    pdc.addMenuItem("BACK", "-1");
+
+    // gameLoop(player, schoolarray, 2, eateryarray, 1);
+
+    gameStart(game_info, 3);
+
+    // pdc.atEatery(player);
 
 }
