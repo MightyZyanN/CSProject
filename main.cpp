@@ -14,11 +14,15 @@ class Eatery;
 
 int getConsoleWidth();
 
-void positionText(const string &text, bool center, bool nextline, bool typeText, int offset);
+void setConsoleColor(int color);
 
-void validateInput(string &input, string prompttext, string invalidprompttext, int min, int max, bool typetext, int offset);
+void resetConsoleColor();
 
-void validateInput(string &input, string prompttext, string invalidprompttext, string str_array[], int str_array_s, bool upper, bool typetext, int offset);
+void positionText(const string text, bool nextline, bool typeText);
+
+void validateInput(string &input, string prompttext, string invalidprompttext, int min, int max, bool typetext);
+
+void validateInput(string &input, string prompttext, string invalidprompttext, string str_array[], int str_array_s, bool upper, bool typetext);
 
 void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize);
 
@@ -98,6 +102,11 @@ class Player
             return name;
         }
 
+        void setCash(double cashval)
+        {
+            cash = cashval;
+        }
+
         double getCash()
         {
             return cash;
@@ -141,8 +150,7 @@ class Player
 
         void printInventory()
         {
-            positionText("Inventory", false, true, false, -19);
-            positionText("", false, false, false, -19);
+            positionText("INVENTORY", true, false);
             if (inventoryarray.size() == 1)
             {
                 cout << "NONE";
@@ -177,7 +185,7 @@ class Player
                 run2 = true;
 
                 printInventory();
-                validateInput(input1, "What Do You Want To Access", "Invalid Item. What Do You Want To Access", inventoryarray.data(), inventoryarray.size(), true, false, -19);
+                validateInput(input1, "What Do You Want To Access", "Invalid Item. What Do You Want To Access", inventoryarray.data(), inventoryarray.size(), true, false);
 
                 if (input1 == "BACK")
                 {
@@ -190,7 +198,7 @@ class Player
                         const int OPTIONARRAYSIZE = 3;
                         string optionarray[OPTIONARRAYSIZE] = {"EAT", "REMOVE", "BACK"};
 
-                        validateInput(input2, "What Do You Want To Do", "Invalid Item. What Do You Want To Do", optionarray, OPTIONARRAYSIZE, true, false, -19);
+                        validateInput(input2, "What Do You Want To Do", "Invalid Item. What Do You Want To Do", optionarray, OPTIONARRAYSIZE, true, false);
 
                         if (input2 == optionarray[OPTIONARRAYSIZE - 1])
                         {
@@ -209,13 +217,13 @@ class Player
                             if (hunger < 10)
                             {
                                 hunger++;
-                                positionText(text1, false, true, false, -19);
-                                positionText(text2, false, true, false, -19);
+                                positionText(text1, true, false);
+                                positionText(text2, true, false);
                                 removeInventoryItem(input1);
                             }
                             else
                             {
-                                positionText(text3, false, true, false, -19);
+                                positionText(text3, true, false);
                             }
                             
                             run2 = false;
@@ -231,15 +239,28 @@ class Player
             return inventoryarray[itemnumber];
         }
 
+        void printHunger(int hunger)
+        {
+            string hungertext = "Your Hunger: ";
+            positionText(hungertext, false, false);
+
+            for (int i = 0; i < hunger; i++)
+            {
+                positionText("-", false, true);
+            }
+            cout << endl;
+        }
+
         void printStats()
         {
-            positionText(name, false, true, false, -19);
-            positionText(gender, false, true, false, -19);
-            positionText(location, false, true, false, -19);
 
-            positionText(to_string(cash), false, true, false, -19);
-            positionText(to_string(hunger), false, true, false, -19);
-            // positionText(name, false, true, false, -19);
+            string cashtext = "Your Cash: ";
+
+            positionText(cashtext, false, false);
+
+            cout << fixed << setprecision(1) << cash << endl;
+
+            printHunger(hunger);
 
         }
 
@@ -265,8 +286,8 @@ class School
 
         void atSchool()
         {
-            string text = "At " + name;
-            positionText(text, false, true, false, -19);
+            string positiontext = "At " + name;
+            positionText(positiontext, true, false);
         }
 
 };
@@ -276,11 +297,11 @@ void Eatery::atEatery(Player &player)
     bool run = true;
     string input;
 
-    string text;
+    string positiontext;
 
-    text = "At " + name;
+    positiontext = "At " + name;
 
-    positionText(text, false, true, false, -19);
+    positionText(positiontext, true, false);
 
     vector<string> menuarray1d(menusize);
 
@@ -290,7 +311,7 @@ void Eatery::atEatery(Player &player)
 
     while (run)
     {
-        validateInput(input, "What Do You Want To Buy", "Invalid Item. What Do You Want To Buy", menuarray1d.data(), menusize, true, false, -19);
+        validateInput(input, "What Do You Want To Buy", "Invalid Item. What Do You Want To Buy", menuarray1d.data(), menusize, true, false);
 
         for (int i = 0; i < menusize; i++)
         {
@@ -324,16 +345,25 @@ void Player::buyFoodItem(Eatery &eatery, string itemname)
                     if (cash >= menuitemprice)
                     {
                         addInventoryItem(eatery.getMenuItemName(i));
-                        string text1 = "Buying " + itemname;
-                        string text2 = itemname + " Added To Inventory";
-                        positionText(text1, false, true, false, -19);
-                        positionText(text2, false, true, false, -19);
+                        setConsoleColor(FOREGROUND_GREEN);
+                        string buyingtext = "Buying " + itemname;
+                        string inventorytext = itemname + " Added To Inventory";
+                        string cashtoberemovedtext = " Removed From Account";
+                        positionText(buyingtext, true, false);
+                        setConsoleColor(FOREGROUND_RED);
+                        cout << fixed << setprecision(1) << menuitemprice;
+                        positionText(cashtoberemovedtext, false, false);
+                        setConsoleColor(FOREGROUND_BLUE);
+                        positionText(inventorytext, true, false);
+                        resetConsoleColor();
                         cash -= menuitemprice;
                     }
                     else
                     {
-                        string text = "Not Enough Money";
-                        positionText(text, false, true, false, -19);
+                        setConsoleColor(FOREGROUND_RED);
+                        string lessmoneytext = "Not Enough Money";
+                        positionText(lessmoneytext, true, false);
+                        resetConsoleColor();
                     }
 
                 }
@@ -353,7 +383,7 @@ void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eater
 
     while (run)
     {
-        validateInput(input, "What's Your Move", "Invalid Move. What's Your Move", inputarray, 4, true, false, -19);
+        validateInput(input, "What's Your Move", "Invalid Move. What's Your Move", inputarray, 4, true, false);
 
         for (int i = 0; i < INPUTARRAYLENGTH; i++)
         {
@@ -416,7 +446,7 @@ void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, E
     {
         printtext = true;
 
-        validateInput(input, "Which Location Do You Want To Go To", "Invalid Location", inputarray1d, INPUTARRAYLENGTH, true, false, -19);
+        validateInput(input, "Which Location Do You Want To Go To", "Invalid Location. Which Location Do You Want To Go To", inputarray1d, INPUTARRAYLENGTH, true, false);
 
         for (int i = 0; i < INPUTARRAYLENGTH; i++)
         {
@@ -432,8 +462,8 @@ void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, E
                 {
                     printtext = false;
                     player.setLocation(input);
-                    string text = "Moving to " + input;
-                    positionText(text, false, true, false, -19);
+                    string movingtext = "Moving to " + input;
+                    positionText(movingtext, true, false);
                 }
                 if (inputarray[i][1] == "SCHOOL")
                 {
@@ -468,8 +498,6 @@ void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, E
     }
 }
 
-
-
 int getConsoleWidth()
 {
     CONSOLE_SCREEN_BUFFER_INFO csbi;
@@ -481,7 +509,19 @@ int getConsoleWidth()
     return columns;
 }
 
-void typeText(string text, int typedelay, bool nextline)
+void setConsoleColor(int color)
+{
+    HANDLE hconsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hconsole, color);
+}
+
+void resetConsoleColor()
+{
+    HANDLE hconsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hconsole, 7);
+}
+
+void typeText(const string text, int typedelay, bool nextline)
 {
     const int SOUNDDURATION = 500;
 
@@ -507,32 +547,20 @@ void typeText(string text, int typedelay, bool nextline)
 
 }
 
-void positionText(const string &text, bool center, bool nextline, bool typetext, int offset)
+void positionText(const string text, bool nextline, bool typetext)
 {
     const int TYPEDELAY = 250;
 
-    int consoleWidth = getConsoleWidth();
     int textLength = text.length();
-    int spaces;
-
-    if (center)
-    {
-        spaces = ((consoleWidth - textLength) / 2) + offset;
-    }
-    else
-    {
-        spaces = ((consoleWidth) / 2) + offset;
-    }
 
     if (typetext)
     {
-        cout << string(spaces, ' ');
         typeText(text, TYPEDELAY, nextline);
     }
     else
     {
-        cout << string(spaces, ' ') << text;
 
+        cout << text;
         if (nextline)
         {
             cout << endl;
@@ -542,25 +570,21 @@ void positionText(const string &text, bool center, bool nextline, bool typetext,
 
 }
 
-void validateInput(string &input, string prompttext, string invalidprompttext, int min, int max, bool typetext, int offset)
+void validateInput(string &input, string prompttext, string invalidprompttext, int min, int max, bool typetext)
 {
-    positionText(prompttext, false, true, typetext, offset);
-
-    positionText("", false, false, typetext, offset);
+    positionText(prompttext, true, typetext);
 
     while((getline(cin, input)) && ((input.length() < min) || (input.length() > max)))
     {
-        positionText(invalidprompttext, false, true, typetext, offset);
-        positionText("", false, false, typetext, offset);
+        positionText(invalidprompttext, true, typetext);
+        positionText("", false, typetext);
     }
 
 }
 
-void validateInput(string &input, string prompttext, string invalidprompttext, string str_array[], int str_array_s, bool upper, bool typetext, int offset)
+void validateInput(string &input, string prompttext, string invalidprompttext, string str_array[], int str_array_s, bool upper, bool typetext)
 {
-    positionText(prompttext, false, true, typetext, offset);
-
-    positionText("", false, false, typetext, offset);
+    positionText(prompttext, true, typetext);
 
     cin >> input;
 
@@ -600,9 +624,7 @@ void validateInput(string &input, string prompttext, string invalidprompttext, s
             break;
         }
 
-        positionText(invalidprompttext, false, true, typetext, offset);
-
-        positionText("", false, false, typetext, offset);
+        positionText(invalidprompttext, true, typetext);
 
         cin >> input;
 
@@ -631,8 +653,8 @@ int gameStart(string game_info[], int s)
     string gender;
     string school;
 
-    string gender_validation[3] = {"male", "female", "other"};
-    string school_validation[3] = {"SSE", "SDSB", "HSS"};
+    string gendervalidation[3] = {"male", "female", "other"};
+    string schoolvalidation[3] = {"SSE", "SDSB", "HSS"};
 
     const int NAMEMIN = 3;
     const int NAMEMAX = 10;
@@ -641,19 +663,19 @@ int gameStart(string game_info[], int s)
 
     const int TYPETEXT = true;
 
-    positionText("Welcome to LUMS Student Life Simulator", true, true, true, 0);
+    positionText("Welcome to LUMS Student Life Simulator", true, true);
 
     cout << endl;
 
-    positionText("Design Your Player", false, true, true, TEXTOFFSET);
+    positionText("Design Your Player", true, true);
 
     cout << endl;
 
-    validateInput(name, "Choose Your Name", "The Chosen Name Must be Between 2 and 10 Characters", 2, 15, TYPETEXT, TEXTOFFSET);
+    validateInput(name, "Choose Your Name", "The Chosen Name Must be Between 2 and 10 Characters", 2, 15, TYPETEXT);
 
-    validateInput(gender, "Choose Your Gender", "The Chosen Gender Must Either be Male, Female OR Other", gender_validation, 3, false, TYPETEXT, TEXTOFFSET);
+    validateInput(gender, "Choose Your Gender", "The Chosen Gender Must Either be Male, Female OR Other", gendervalidation, 3, false, TYPETEXT);
 
-    validateInput(school, "Choose Your School", "The Chosen School Must Either be SSE, SDSB, OR HSS", school_validation, 3, true, TYPETEXT, TEXTOFFSET);
+    validateInput(school, "Choose Your School", "The Chosen School Must Either be SSE, SDSB, OR HSS", schoolvalidation, 3, true, TYPETEXT);
 
     game_info[0] = name;
     game_info[1] = gender;
@@ -668,6 +690,8 @@ void gameLoop()
 
     const int OPTIONSARRAYLENGTH = 2;
 
+    double cashtobeadded = 100.0;
+
     string optionsarray[OPTIONSARRAYLENGTH] = {"YES", "NO"};
 
     bool run = true;
@@ -676,7 +700,6 @@ void gameLoop()
 
     while (run)
     {
-
         string game_info[3] = {"Zyan", "Male", "SSE"}; 
 
         Player player = Player(game_info[0], game_info[1], game_info[2]);
@@ -700,19 +723,29 @@ void gameLoop()
 
         for (int i = 1; i <= SEMESTERDURATION; i++)
         {
-            string text1 = "Day " + to_string(i);
-            string text2 = player.getName() + " Starved to Death";
+            string day = "Day " + to_string(i);
+            string deathtext = player.getName() + " Starved to Death";
+            string cashtobeaddedtext = " Added to Account";
 
-            positionText(text1, false, true, false, -19);
+            positionText(day, true, false);
 
             if (i != 1)
             {
                 player.setHunger(player.getHunger() - 1);
+
+                setConsoleColor(FOREGROUND_GREEN);
+
+                cout << fixed << setprecision(1) << cashtobeadded;
+                positionText(cashtobeaddedtext, true, false);
+
+                player.setCash(player.getCash() + cashtobeadded);
+
+                resetConsoleColor();
             }
 
             if (player.getHunger() == 0)
             {
-                positionText(text2, false, true, false, -19);
+                positionText(deathtext, true, false);
                 break;
             }
 
@@ -722,7 +755,7 @@ void gameLoop()
 
         }
 
-        validateInput(input, "Do You Want to Retry", "Invalid Input. Do You Want To Retry", optionsarray, OPTIONSARRAYLENGTH, true, false, -19);
+        validateInput(input, "Do You Want to Retry", "Invalid Input. Do You Want To Retry", optionsarray, OPTIONSARRAYLENGTH, true, false);
 
         if (input == optionsarray[1])
         {
@@ -736,6 +769,8 @@ void gameLoop()
 
 int main()
 {
+    resetConsoleColor();
+
     gameLoop();
 
     // gameStart(game_info, 3);
