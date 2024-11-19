@@ -4,9 +4,8 @@
 #include <vector>
 #include <algorithm>
 #include <cctype>
-#include <thread>
-#include <chrono>
-#include <atomic>
+#include <ctime>
+#include <cstdlib>
 #include <windows.h>
 #include <mmsystem.h>
 using namespace std;
@@ -15,6 +14,7 @@ class Player;
 class School;
 class Eatery;
 class TimeLocation;
+class NPC;
 
 int getConsoleWidth();
 
@@ -28,7 +28,9 @@ void validateInput(string &input, string prompttext, string invalidprompttext, i
 
 void validateInput(string &input, string prompttext, string invalidprompttext, string str_array[], int str_array_s, bool upper, bool typetext);
 
-void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize);
+void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize);
+
+void mainMenu(int state);
 
 void gameLoop();
 
@@ -105,14 +107,19 @@ class Player
         string name;
         string gender;
         string school;
+        int social = 0;
         int schoolindex;
         double cash = 1000.0;
         float gpa = 4.0f;
         float studyloss = 0.0f;
-        int hunger = 10;
+
+        const int MAXHUNGER = 5;
+        int hunger = MAXHUNGER;
         string location = "ENTRANCE";
 
         vector<string> inventoryarray = {"BACK"};
+
+        vector<string> classestaken;
 
     public:
         Player(string nameval, string genderval, string schoolval, int schoolindexval)
@@ -124,6 +131,16 @@ class Player
         }
 
         void buyFoodItem(Eatery &eatery, string itemname);
+
+        void setSocial(int amount)
+        {
+            social = amount;
+        }
+
+        int getSocial()
+        {
+            return social;
+        }
 
         void setStudyLoss(float studylossval)
         {
@@ -138,6 +155,10 @@ class Player
         void setGPA(float amount)
         {
             gpa = amount;
+            if (gpa <= 0)
+            {
+                gpa = 0;
+            }
         }
 
         float getGPA()
@@ -180,6 +201,45 @@ class Player
             location = locationval;
 
             return location;
+        }
+
+        void addClassTaken(const string &classtaken)
+        {
+            classestaken.push_back(classtaken);
+        }
+
+        vector<string> getClassesTaken()
+        {
+            return classestaken;
+        }
+
+        void removeClassesTaken()
+        {
+            for (int i = classestaken.size() - 1; i >= 0; i--)
+            {
+                classestaken.pop_back();
+            }
+        }
+
+        void printClassesTaken()
+        {
+            positionText("CLASSES TAKEN", true, false);
+            if (classestaken.size() == 0)
+            {
+                cout << "NONE";
+            }
+            else
+            {
+                for (int i = 0; i < classestaken.size(); i++)
+                {   
+                    cout << classestaken[i];
+                    if (i != classestaken.size() - 1)
+                    {
+                        cout << ", ";
+                    }
+                }
+            }
+            cout << endl;
         }
 
         void addInventoryItem(const string &item)
@@ -272,7 +332,7 @@ class Player
                             string text1 = "Eating " + input1;
                             string text2 = "Removed " + input1 + " From Inventory";
                             string text3 = "Hunger Full";
-                            if (hunger < 10)
+                            if (hunger < MAXHUNGER)
                             {
                                 hunger++;
                                 setConsoleColor(FOREGROUND_GREEN);
@@ -320,6 +380,8 @@ class Player
 
             string gpatext = "Your GPA: ";
 
+            string socialtext = "Your Social Factor: ";
+
             positionText(cashtext, false, false);
 
             cout << fixed << setprecision(1) << cash << endl;
@@ -329,6 +391,10 @@ class Player
             positionText(gpatext, false, false);
 
             cout << fixed << setprecision(1) << gpa << endl;
+
+            positionText(socialtext, false, false);
+
+            cout << social << endl;
 
         }
 
@@ -342,6 +408,12 @@ class School
 
         vector<string> coursearray;
 
+        const int TIME1 = 11;
+        const int TIME2 = 14;
+        const int TIME3 = 17;
+
+        int timearray[3] = {TIME1, TIME2, TIME3}; 
+
     public:
         School(string nameval, int locationval)
         {
@@ -349,7 +421,7 @@ class School
             location = locationval;
         }
 
-        void startCourse(Player &player, TimeLocation &timelocation);
+        void startCourse(Player &player, TimeLocation &timelocation, NPC *npcarray[], bool npccheck);
 
         string getName()
         {
@@ -388,7 +460,7 @@ class School
             {
                 for (int i = 0; i < coursearray.size(); i++)
                 {   
-                    cout << coursearray[i];
+                    cout << coursearray[i] << " @ Time: " << timearray[i];
                     if (i != coursearray.size() - 1)
                     {
                         cout << ", ";
@@ -454,7 +526,7 @@ class TimeLocation
             return time;
         }
 
-        void atTimeLocation(Player &player, School school)
+        void atTimeLocation(Player &player, School &school, NPC *npcarray[])
         {
             bool run = true;
 
@@ -482,7 +554,7 @@ class TimeLocation
                     else
                     {
                         progressTime(1);
-                        school.startCourse(player, *this);
+                        school.startCourse(player, *this, npcarray, true);
                         break;
                     }
                 
@@ -491,6 +563,58 @@ class TimeLocation
         }
 
     
+};
+
+class NPC
+{
+    private:
+        string name;
+        int time;
+        int social;
+
+    public:
+        NPC(string nameval, int timeval)
+        {
+            name = nameval;
+            time = timeval;
+        }
+
+        int getTime()
+        {
+            return time;
+        }
+
+        void run(Player &player, TimeLocation &timelocation)
+        {
+            const int INPUTARRAYLENGTH = 2;
+            string inputarray[INPUTARRAYLENGTH] = {"YES", "NO"};
+
+            string input;
+
+            int timeamount = 2;
+            int socialamount = 1;
+
+            string npctext1 = name + " Has Approached You";
+            string npctext2 = "Do You Want To Hangout With " + name;
+
+            string socialtext1 = "Social Increased";
+
+            positionText(npctext1, true, false);
+            positionText(npctext2, true, false);
+
+            validateInput(input, "Yes/No", "Invalid Input. Do You Want To Hangout", inputarray, INPUTARRAYLENGTH, true, false);
+
+            if (input == inputarray[0])
+            {
+                timelocation.progressTime(timeamount);
+                setConsoleColor(FOREGROUND_GREEN);
+                positionText(socialtext1, true, false);
+                player.setSocial(player.getSocial() + socialamount);
+                social += socialamount;
+            }
+            resetConsoleColor();
+
+        }
 };
 
 void Eatery::atEatery(Player &player)
@@ -573,7 +697,7 @@ void Player::buyFoodItem(Eatery &eatery, string itemname)
             }
 }
     
-void School::startCourse(Player &player, TimeLocation &timelocation)
+void School::startCourse(Player &player, TimeLocation &timelocation, NPC *npcarray[], bool npccheck)
 {
     const int INPUTARRAYLENGTH = 2;
     string inputarray[INPUTARRAYLENGTH] = {"YES", "NO"};
@@ -582,39 +706,64 @@ void School::startCourse(Player &player, TimeLocation &timelocation)
 
     int amount = 2;
 
+    string classtaken;
+
     string attendtext1 = "Do You Want To Attend " + coursearray[0];
     string attendtext2 = "Do You Want To Attend " + coursearray[1];
     string attendtext3 = "Do You Want To Attend " + coursearray[2];
 
-    string missedtext = "You Missed The Class";
+    string missedtext1 = "You Missed The Class";
+    string missedtext2 = "GPA Affected";
+
+    int time1 = 11;
+    int time2 = 14;
+    int time3 = 17;
 
     int time = timelocation.getTime();
 
-    if (time == 11)
+    for (int i = 0; i < 3; i++)
+    {
+        if (npcarray[i]->getTime() == time && npccheck)
+        {
+            npcarray[i]->run(player, timelocation);
+            startCourse(player, timelocation, npcarray, false);
+        }
+    }
+
+    if (time == time1)
     {
         positionText(attendtext1, true, false);
         validateInput(input, "Yes/No", "Invalid Input. Do You Want To Attend", inputarray, INPUTARRAYLENGTH, true, false);
+        classtaken = coursearray[0];
     }
-    else if (time == 14)
+    else if (time == time2)
     {
         positionText(attendtext2, true, false);
         validateInput(input, "Yes/No", "Invalid Input. Do You Want To Attend", inputarray, INPUTARRAYLENGTH, true, false);
+        classtaken = coursearray[1];
     }
-    else if (time == 17)
+    else if (time == time3)
     {
         positionText(attendtext3, true, false);
         validateInput(input, "Yes/No", "Invalid Input. Do You Want To Attend", inputarray, INPUTARRAYLENGTH, true, false);
+        classtaken = coursearray[2];
     }
 
     if (input == "YES")
     {
         timelocation.progressTime(amount);
+        player.addClassTaken(classtaken);
+        time = timelocation.getTime();
+        startCourse(player, timelocation, npcarray, true);
     }
     else if (input == "NO")
     {
-        positionText(missedtext, true, false);
+        setConsoleColor(FOREGROUND_RED);
+        positionText(missedtext1, true, false);
+        positionText(missedtext2, true, false);
         player.setStudyLoss(player.getStudyLoss() + 0.1);
         player.setGPA(player.getGPA() - player.getStudyLoss());
+        resetConsoleColor();
     }
     
 }
@@ -623,7 +772,7 @@ void mainMenu(int state)
 {
     string titletext = "LUMS Student Life Simulator";
     string menutext1 = "- START";
-    string menutext2 = "Resume";
+    string menutext2 = "- RESUME";
     string menutext3 = "- EXIT";
     string pausemenutext = "Pause Menu";
 
@@ -648,12 +797,29 @@ void mainMenu(int state)
         {
             string goodbyetext = "See You Later. Good Bye";
             positionText(goodbyetext, true, false);
+            Sleep(1000);
+            exit(0);
         }
 
     }
+    else if (state == 1)
+    {
+        string inputarray[2] = {"RESUME", "EXIT"};
+        positionText(pausemenutext, true, false);
+        positionText(menutext2, true, false);
+        positionText(menutext3, true, false);
+        validateInput(input, "What Do You Want To Do", "Invalid Input. Resume Or Exit", inputarray, 2, true, false);
+        if (input == inputarray[1])
+        {
+            string goodbyetext = "See You Later. Good Bye";
+            positionText(goodbyetext, true, false);
+            Sleep(1000);
+            exit(0);
+        }
+    }
 }
 
-void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize)
+void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize)
 {
 
     const int INPUTARRAYLENGTH = 5;
@@ -662,7 +828,7 @@ void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eater
 
     bool run = true;
 
-    string inputarray[INPUTARRAYLENGTH] = {"LOCATION", "INVENTORY", "STATS", "ENDDAY"};
+    string inputarray[INPUTARRAYLENGTH] = {"LOCATION", "INVENTORY", "STATS", "PAUSE", "END DAY"};
 
     while (run)
     {
@@ -675,11 +841,16 @@ void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eater
                 run = false;
                 break;
             }
+            else if (input == inputarray[INPUTARRAYLENGTH - 2])
+            {
+                mainMenu(1);
+                input = "";
+            }
             else
             {
                 if (input == inputarray[0])
                 {
-                    inputLocation(player, schoolarray, schoolarraysize, eateryarray, eateryarraysize, timelocationarray, timelocationarraysize);
+                    inputLocation(player, schoolarray, schoolarraysize, eateryarray, eateryarraysize, timelocationarray, timelocationarraysize, npcarray, npcarraysize);
                 }
                 else if (input == inputarray[1])
                 {
@@ -698,7 +869,7 @@ void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eater
 
 }
 
-void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize)
+void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize)
 {
     const int INPUTARRAYLENGTH = 6;
 
@@ -779,7 +950,7 @@ void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, E
                     {
                         if (input == timelocationarray[j] -> getName())
                         {
-                            timelocationarray[j] -> atTimeLocation(player, *schoolarray[player.getSchoolIndex()]);
+                            timelocationarray[j] -> atTimeLocation(player, *schoolarray[player.getSchoolIndex()], npcarray);
                             run = false;
                             break;
                         }
@@ -999,6 +1170,10 @@ void gameStart(string game_info[], int s)
     game_info[1] = gender;
     game_info[2] = school;
 
+    int schoolindex = schoolvalidation->find(school);
+
+    game_info[3] = to_string(schoolindex);
+
 }
 
 void initializeSchool(string schoolname, School *schoolarray[], int s)
@@ -1022,34 +1197,41 @@ void initializeSchool(string schoolname, School *schoolarray[], int s)
             schoolarray[schoolindex]->addCourse("CS-100");
             break;
         }
+        else if (schoolname == "SDSB")
+        {
+            schoolindex = i;
+            schoolarray[schoolindex]->addCourse("ACCT-100");
+            schoolarray[schoolindex]->addCourse("MECO-111");
+            schoolarray[schoolindex]->addCourse("MGMT-142");
+        }
     }
 
-    // string scheduletext1 = "Design Your Schedule";
-    // string scheduletext2 = "Your New Schedule";
+    string scheduletext1 = "Design Your Schedule";
+    string scheduletext2 = "Your New Schedule";
 
-    // positionText(scheduletext1, true, false);
+    positionText(scheduletext1, true, false);
 
-    // schoolarray[schoolindex]->printCourses();
+    schoolarray[schoolindex]->printCourses();
 
-    // validateInput(input1, "Which Course Do You Want At Position 1", "Invalid Course. Which Course Do You Want At Position 1", schoolarray[schoolindex]->getCourseArray().data(), schoolarray[schoolindex]->getCourseArray().size(), true, false);
+    validateInput(input1, "Which Course Do You Want At Position 1", "Invalid Course. Which Course Do You Want At Position 1", schoolarray[schoolindex]->getCourseArray().data(), schoolarray[schoolindex]->getCourseArray().size(), true, false);
 
-    // schoolarray[schoolindex]->removeCourse(input1);
+    schoolarray[schoolindex]->removeCourse(input1);
 
-    // validateInput(input2, "Which Course Do You Want At Position 2", "Invalid Course. Which Course Do You Want At Position 2", schoolarray[schoolindex]->getCourseArray().data(), schoolarray[schoolindex]->getCourseArray().size(), true, false);
+    validateInput(input2, "Which Course Do You Want At Position 2", "Invalid Course. Which Course Do You Want At Position 2", schoolarray[schoolindex]->getCourseArray().data(), schoolarray[schoolindex]->getCourseArray().size(), true, false);
 
-    // schoolarray[schoolindex]->removeCourse(input2);
+    schoolarray[schoolindex]->removeCourse(input2);
 
-    // validateInput(input3, "Which Course Do You Want At Position 3", "Invalid Course. Which Course Do You Want At Position 3", schoolarray[schoolindex]->getCourseArray().data(), schoolarray[schoolindex]->getCourseArray().size(), true, false);
+    validateInput(input3, "Which Course Do You Want At Position 3", "Invalid Course. Which Course Do You Want At Position 3", schoolarray[schoolindex]->getCourseArray().data(), schoolarray[schoolindex]->getCourseArray().size(), true, false);
     
-    // schoolarray[schoolindex]->removeCourse(input3);
+    schoolarray[schoolindex]->removeCourse(input3);
 
-    // schoolarray[schoolindex]->addCourse(input1);
-    // schoolarray[schoolindex]->addCourse(input2);
-    // schoolarray[schoolindex]->addCourse(input3);
+    schoolarray[schoolindex]->addCourse(input1);
+    schoolarray[schoolindex]->addCourse(input2);
+    schoolarray[schoolindex]->addCourse(input3);
 
-    // positionText(scheduletext2, true, false);
+    positionText(scheduletext2, true, false);
 
-    // schoolarray[schoolindex]->printCourses();
+    schoolarray[schoolindex]->printCourses();
 
 }
 
@@ -1072,7 +1254,7 @@ void initializeEatery(Eatery *eateryarray[], int s)
 
 void gameLoop()
 {
-    const int SEMESTERDURATION = 40;
+    const int SEMESTERDURATION = 10;
 
     const int OPTIONSARRAYLENGTH = 2;
 
@@ -1086,11 +1268,11 @@ void gameLoop()
 
     while (run)
     {
-        // string game_info[3];
+        string game_info[4];
 
-        string game_info[4] = {"Zyan", "Male", "SSE", "0"}; 
+        // string game_info[4] = {"Zyan", "Male", "SSE", "0"}; 
 
-        // gameStart(game_info, 3);
+        gameStart(game_info, 4);
 
         Player player = Player(game_info[0], game_info[1], game_info[2], stoi(game_info[3]));
 
@@ -1111,11 +1293,31 @@ void gameLoop()
 
         TimeLocation *timelocationarray[1] = {&library};
 
+        srand(static_cast<unsigned int>(time(0)));
+
+        int randomtime = rand() % 6 + 9;
+
+        // cout << "Random Time " << randomtime << endl;
+
+        NPC ahmed = NPC("AHMED", randomtime);
+
+        NPC ali = NPC("ALI", randomtime + 3);
+
+        NPC ayaan = NPC("AYAAN", randomtime + 6);
+
+        NPC *npcarray[3] = {&ahmed, &ali, &ayaan};
+
         for (int i = 1; i <= SEMESTERDURATION; i++)
         {
             string day = "Day " + to_string(i);
             string deathtext = player.getName() + " Starved to Death";
             string cashtobeaddedtext = " Added to Account";
+
+            string missedtext1 = "You Missed 1 Class";
+            string missedtext2 = "You Missed 2 Classes";
+            string missedtext3 = "You Missed 3 Classes";
+            string missedtext4 = "GPA Affected";
+            string takentext1 = "You Took All Classes";
 
             positionText(day, true, false);
 
@@ -1140,13 +1342,51 @@ void gameLoop()
 
             if (player.getHunger() == 0)
             {
+                setConsoleColor(FOREGROUND_RED);
                 positionText(deathtext, true, false);
+                resetConsoleColor();
                 break;
             }
 
             player.printStats();
         
-            takeInput(player, schoolarray, 2, eateryarray, 1, timelocationarray, 1);
+            takeInput(player, schoolarray, 2, eateryarray, 1, timelocationarray, 1, npcarray, 3);
+
+            player.printClassesTaken();
+
+            if (player.getClassesTaken().size() == 3)
+            {
+                setConsoleColor(FOREGROUND_GREEN);
+                positionText(takentext1, true, false);
+            }
+            else
+            {
+                setConsoleColor(FOREGROUND_RED);
+                if (player.getClassesTaken().size() == 2)
+                {
+                    positionText(missedtext1, true, false);
+                    player.setStudyLoss(player.getStudyLoss() + 0.1);
+                }
+                else if (player.getClassesTaken().size() == 1)
+                {
+                    positionText(missedtext2, true, false);
+                    player.setStudyLoss(player.getStudyLoss() + 0.2);
+                }
+                else if (player.getClassesTaken().size() == 0)
+                {
+                    positionText(missedtext3, true, false);
+                    player.setStudyLoss(player.getStudyLoss() + 0.3);
+                }
+                
+                positionText(missedtext4, true, false);
+
+            }
+
+            player.setGPA(player.getGPA() - player.getStudyLoss());
+
+            player.removeClassesTaken();
+
+            resetConsoleColor();
 
         }
 
