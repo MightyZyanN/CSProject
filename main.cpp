@@ -4,17 +4,25 @@
 #include <vector>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <ctime>
+#include <thread>
+#include <chrono>
+#include <atomic>
 #include <cstdlib>
 #include <windows.h>
 #include <mmsystem.h>
+#include <sstream>
+#include <SFML/Graphics.hpp>
 using namespace std;
+using namespace sf;
 
 class Player;
 class School;
 class Eatery;
 class TimeLocation;
 class NPC;
+class MainWindow;
 
 int getConsoleWidth();
 
@@ -28,11 +36,15 @@ void validateInput(string &input, string prompttext, string invalidprompttext, i
 
 void validateInput(string &input, string prompttext, string invalidprompttext, string str_array[], int str_array_s, bool upper, bool typetext);
 
-void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize);
+void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize, vector<vector<string>> &locationarray, int locationarraylength);
+
+void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize, vector<vector<string>> &locationarray, int locationarraylength);
+
+void displayOptions(string inputarray[], int s);
 
 void mainMenu(int state);
 
-void gameLoop();
+void gameLoop(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize, vector<vector<string>> &locationarray, int locationarraylength, MainWindow &mainwindow, int semesterduration);
 
 class Eatery
 {
@@ -109,11 +121,11 @@ class Player
         string school;
         int social = 0;
         int schoolindex;
-        double cash = 1000.0;
+        double cash = 1000.0f;
         float gpa = 4.0f;
         float studyloss = 0.0f;
 
-        const int MAXHUNGER = 5;
+        const int MAXHUNGER = 3;
         int hunger = MAXHUNGER;
         string location = "ENTRANCE";
 
@@ -316,6 +328,8 @@ class Player
                         const int OPTIONARRAYSIZE = 3;
                         string optionarray[OPTIONARRAYSIZE] = {"EAT", "REMOVE", "BACK"};
 
+                        displayOptions(optionarray, OPTIONARRAYSIZE);
+
                         validateInput(input2, "What Do You Want To Do", "Invalid Item. What Do You Want To Do", optionarray, OPTIONARRAYSIZE, true, false);
 
                         if (input2 == optionarray[OPTIONARRAYSIZE - 1])
@@ -368,9 +382,20 @@ class Player
 
             for (int i = 0; i < hunger; i++)
             {
-                positionText("-", false, true);
+                positionText("-", false, false);
             }
             cout << endl;
+        }
+
+        string getHungerString()
+        {
+            string input = "";
+            for (int i = 0; i < hunger; i++)
+            {
+                input = input + "-";
+            }
+
+            return input;
         }
 
         void printStats()
@@ -449,7 +474,7 @@ class School
 
         }
 
-        void printCourses()
+        void printCourses(bool showtime)
         {
             positionText("YOUR COURSES", true, false);
             if (coursearray.size() == 0)
@@ -460,7 +485,11 @@ class School
             {
                 for (int i = 0; i < coursearray.size(); i++)
                 {   
-                    cout << coursearray[i] << " @ Time: " << timearray[i];
+                    cout << coursearray[i];
+                    if (showtime)
+                    {
+                        cout << " @ Time: " << timearray[i];
+                    }
                     if (i != coursearray.size() - 1)
                     {
                         cout << ", ";
@@ -475,7 +504,7 @@ class School
             string positiontext = "At " + name;
             positionText(positiontext, true, false);
 
-            printCourses();
+            printCourses(true);
         }
 
 };
@@ -516,9 +545,18 @@ class TimeLocation
 
         void progressTime(int amount)
         {
-            updateTime(amount);
-            positionText("Progressing Time...", true, false);
-            positionText(timetext, true, false);
+            if (time <= 24)
+            {
+                updateTime(amount);
+                positionText("Progressing Time...", true, false);
+                positionText(timetext, true, false);
+            }
+            else
+            {
+                positionText("Day Has Ended. Please Type ENDDAY", true, false);
+                time = 24;
+            }
+
         }
 
         int getTime()
@@ -532,8 +570,8 @@ class TimeLocation
 
             string input;
 
-            int inputarraylength = 2;
-            string inputarray[2] = {"PASS TIME", "BACK"};
+            const int INPUTARRAYLENGTH = 2;
+            string inputarray[INPUTARRAYLENGTH] = {"PASSTIME", "BACK"};
 
             timetext = "Current Time: " + to_string(time);
 
@@ -541,9 +579,12 @@ class TimeLocation
 
             while (run)
             {
-                validateInput(input, "What Do You Want To Do", "Invalid Input. What Do You Want To Do", inputarray, inputarraylength, true, false);
 
-                for (int i = 0; i < inputarraylength; i++)
+                displayOptions(inputarray, INPUTARRAYLENGTH);
+
+                validateInput(input, "What Do You Want To Do", "Invalid Input. What Do You Want To Do", inputarray, INPUTARRAYLENGTH, true, false);
+
+                for (int i = 0; i < INPUTARRAYLENGTH; i++)
                 {
 
                     if (input == inputarray[1])
@@ -617,6 +658,263 @@ class NPC
         }
 };
 
+class MainWindow
+{
+    private:
+        RenderWindow window;
+
+        const int WIDTH = 1280;
+        const int HEIGHT = 1280;
+
+        Font font;
+        Text titletext;
+        Text inputfield;
+        Text timetext;
+        Text cashtext;
+        Text hungertext;
+        Text gpatext;
+
+        const int TEXTFONTSIZE = 48;
+
+        double cash;
+        float gpa;
+        string hungerstring;
+
+        atomic<bool> running;
+
+        string input;
+        bool istyping = true;
+
+        Player &player;
+
+        School *schoolarray[2];
+        int schoolarraysize;
+
+        Eatery *eateryarray[1];
+        int eateryarraysize;
+
+        TimeLocation &library;
+
+        NPC *npcarray[3];
+        int npcarraysize;
+
+        vector<ConvexShape> mapcells;
+        vector<Text> maplabels;
+
+        vector<string> locationarray;
+
+        void handleEvents()
+        {
+            Event event;
+            while (window.pollEvent(event))
+            {
+                if (event.type == sf::Event::Closed)
+                {
+                    window.close();
+                }
+            }
+        }
+
+        void update()
+        {
+            cash = player.getCash();
+            gpa = player.getGPA();
+
+            ostringstream oss;
+
+            oss.precision(1);
+
+            oss << fixed << cash;
+
+            string cashstr = oss.str();
+
+            oss.str("");
+            oss.clear();
+            oss.precision(1);
+
+            oss << fixed << gpa;
+
+            string gpastr = oss.str();
+
+            cashtext.setString("Cash: " + cashstr);
+
+            timetext.setString("Time: " + to_string(library.getTime()));
+
+            hungerstring = player.getHungerString();
+
+            hungertext.setString("Hunger: " + hungerstring);
+
+            gpatext.setString("GPA: " + gpastr);
+
+        }
+
+        void render()
+        {
+            window.clear();
+            window.draw(titletext);
+            window.draw(timetext);
+            window.draw(cashtext);
+            window.draw(gpatext);
+            window.draw(hungertext);
+
+            for (const auto &cell : mapcells)
+            {
+                window.draw(cell);
+            }
+            for (auto &label : maplabels)
+            {
+                window.draw(label);
+                if (player.getLocation() == label.getString())
+                {
+                    label.setFillColor(Color::Green);
+                }
+                else
+                {
+                    label.setFillColor(Color::White);
+                }
+            }
+
+            window.display();
+        }
+
+    void centerTitleText()
+    {
+        FloatRect textRect = titletext.getLocalBounds();
+        titletext.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
+        titletext.setPosition(Vector2f(window.getSize().x / 2.0f, 50));
+    }   
+
+    public:
+        MainWindow(Player &playerval, School *schooarrayval[], int schoolarraysizeval, Eatery *eateryarrayval[], int eateryarraysizeval, TimeLocation &libraryval,  NPC *npcarrayval[], int npcarraysizeval) 
+        : player(playerval), schoolarraysize(schoolarraysizeval), eateryarraysize(eateryarraysizeval), library(libraryval), npcarraysize(npcarraysizeval), running(true)
+        {
+
+            window.create(VideoMode(1280, 720), "LUMS STUDENT LIFE SIMULATOR");
+
+            Image icon;
+
+            if (!icon.loadFromFile("logo.png"))
+            {
+                cerr << "Could Not Load Icon" << endl;
+            }
+            else
+            {
+                window.setIcon(icon.getSize().x, icon.getSize().y, icon.getPixelsPtr());
+            }
+
+            if (!font.loadFromFile("Roboto/Roboto-Bold.ttf"))
+            {
+                cerr << "Could Not Load Font" << endl;
+            }
+
+            titletext.setFont(font);
+            titletext.setCharacterSize(46);
+            titletext.setFillColor(Color::White);
+            titletext.setString("LUMS STUDENT LIFE SIMULATOR");
+            centerTitleText();
+            
+            timetext.setFont(font);
+            timetext.setCharacterSize(TEXTFONTSIZE);
+            timetext.setPosition(20, 200);
+            timetext.setFillColor(Color::White);
+            timetext.setString("Time: " + to_string(library.getTime()));
+
+            cashtext.setFont(font);
+            cashtext.setCharacterSize(TEXTFONTSIZE);
+            cashtext.setPosition(20, 300);
+            cashtext.setFillColor(Color::White);
+
+            gpatext.setFont(font);
+            gpatext.setCharacterSize(TEXTFONTSIZE);
+            gpatext.setPosition(20, 400);
+            gpatext.setFillColor(Color::White);
+
+            hungertext.setFont(font);
+            hungertext.setCharacterSize(TEXTFONTSIZE);
+            hungertext.setPosition(20, 500);
+            hungertext.setFillColor(Color::White);
+
+        }
+
+        void run()
+        {
+
+            while (running && window.isOpen())
+            {
+                HWND hwnd = window.getSystemHandle();
+                SetWindowPos(hwnd, HWND_TOPMOST, 600, 100, 1280, 720, SWP_NOSIZE);
+                handleEvents();
+                render();
+                update();
+            
+            }
+
+            window.close();
+        }
+
+        void setLocationArray(string locationarray1d[], int locationarray1dlength)
+        {
+            for (int i = 0; i < locationarray1dlength; i++)
+            {
+                locationarray.push_back(locationarray1d[i]);
+            }
+
+        }
+
+        void createMap()
+        {
+            const int cellSize = 150;
+            const int rows = 3;
+            const int cols = 3;
+
+            for (int row = 0; row < rows; row++)
+            {
+                for (int col = 0; col < cols; col++) {
+                    ConvexShape cell;
+                    cell.setPointCount(8);
+
+                    cell.setPoint(0, Vector2f(0, 20));
+                    cell.setPoint(1, Vector2f(20, 0));
+                    cell.setPoint(2, Vector2f(cellSize - 20, 0));
+                    cell.setPoint(3, Vector2f(cellSize, 20));
+
+                    cell.setPoint(4, Vector2f(cellSize, cellSize - 20));
+                    cell.setPoint(5, Vector2f(cellSize - 20, cellSize));
+                    cell.setPoint(6, Vector2f(20, cellSize));
+                    cell.setPoint(7, Vector2f(0, cellSize - 20));
+
+                    cell.setPosition(WIDTH - 500 + col * cellSize, 160 + row * cellSize);
+                    cell.setFillColor(Color::Blue);
+                    cell.setOutlineColor(Color::Black);
+                    cell.setOutlineThickness(2);
+                    mapcells.push_back(cell);
+
+                    Text label;
+                    label.setFont(font);
+                    label.setString(locationarray[row * cols + col]);
+                    label.setCharacterSize(22);
+                    label.setFillColor(Color::White);
+                    FloatRect textRect = label.getLocalBounds();
+                    label.setOrigin(textRect.left + textRect.width / 2.0f, textRect.top + textRect.height / 2.0f);
+                    label.setPosition(cell.getPosition().x + cellSize / 2, cell.getPosition().y + cellSize / 2);
+                    maplabels.push_back(label);
+
+                }
+            }
+        }
+
+        void stop()
+        {
+            running = false;
+        }
+
+        string getInput()
+        {
+            return input;
+        }
+
+};
+
 void Eatery::atEatery(Player &player)
 {
     bool run = true;
@@ -660,41 +958,41 @@ void Eatery::atEatery(Player &player)
 }
 
 void Player::buyFoodItem(Eatery &eatery, string itemname)
+{
+    int menusize = eatery.getMenuSize();
+    double menuitemprice = 0.0;
+
+    for (int i = 0; i < menusize; i++)
+    {
+        if (itemname == eatery.getMenuItemName(i))
         {
-            int menusize = eatery.getMenuSize();
-            double menuitemprice = 0.0;
-
-            for (int i = 0; i < menusize; i++)
+            menuitemprice = stod(eatery.getMenuItemPrice(i));
+            if (cash >= menuitemprice)
             {
-                if (itemname == eatery.getMenuItemName(i))
-                {
-                    menuitemprice = stod(eatery.getMenuItemPrice(i));
-                    if (cash >= menuitemprice)
-                    {
-                        addInventoryItem(eatery.getMenuItemName(i));
-                        setConsoleColor(FOREGROUND_GREEN);
-                        string buyingtext = "Buying " + itemname;
-                        string inventorytext = itemname + " Added To Inventory";
-                        string cashtoberemovedtext = " Removed From Account";
-                        positionText(buyingtext, true, false);
-                        setConsoleColor(FOREGROUND_RED);
-                        cout << fixed << setprecision(1) << menuitemprice;
-                        positionText(cashtoberemovedtext, true, false);
-                        setConsoleColor(FOREGROUND_BLUE);
-                        positionText(inventorytext, true, false);
-                        resetConsoleColor();
-                        cash -= menuitemprice;
-                    }
-                    else
-                    {
-                        setConsoleColor(FOREGROUND_RED);
-                        string lessmoneytext = "Not Enough Money";
-                        positionText(lessmoneytext, true, false);
-                        resetConsoleColor();
-                    }
-
-                }
+                addInventoryItem(eatery.getMenuItemName(i));
+                setConsoleColor(FOREGROUND_GREEN);
+                string buyingtext = "Buying " + itemname;
+                string inventorytext = itemname + " Added To Inventory";
+                string cashtoberemovedtext = " Removed From Account";
+                positionText(buyingtext, true, false);
+                setConsoleColor(FOREGROUND_RED);
+                cout << fixed << setprecision(1) << menuitemprice;
+                positionText(cashtoberemovedtext, true, false);
+                setConsoleColor(FOREGROUND_BLUE);
+                positionText(inventorytext, true, false);
+                resetConsoleColor();
+                cash -= menuitemprice;
             }
+            else
+            {
+                setConsoleColor(FOREGROUND_RED);
+                string lessmoneytext = "Not Enough Money";
+                positionText(lessmoneytext, true, false);
+                resetConsoleColor();
+            }
+
+        }
+    }
 }
     
 void School::startCourse(Player &player, TimeLocation &timelocation, NPC *npcarray[], bool npccheck)
@@ -713,7 +1011,6 @@ void School::startCourse(Player &player, TimeLocation &timelocation, NPC *npcarr
     string attendtext3 = "Do You Want To Attend " + coursearray[2];
 
     string missedtext1 = "You Missed The Class";
-    string missedtext2 = "GPA Affected";
 
     int time1 = 11;
     int time2 = 14;
@@ -760,12 +1057,40 @@ void School::startCourse(Player &player, TimeLocation &timelocation, NPC *npcarr
     {
         setConsoleColor(FOREGROUND_RED);
         positionText(missedtext1, true, false);
-        positionText(missedtext2, true, false);
-        player.setStudyLoss(player.getStudyLoss() + 0.1);
-        player.setGPA(player.getGPA() - player.getStudyLoss());
         resetConsoleColor();
     }
     
+}
+
+void atMain()
+{
+    string input;
+
+    const int OPTIONSARRAYLENGTH = 2;
+
+    string optionsarray[OPTIONSARRAYLENGTH] = {"YES", "NO"};
+
+    displayOptions(optionsarray, OPTIONSARRAYLENGTH);
+
+    validateInput(input, "Do You Want To Leave LUMS?", "Invalid Input. YES/NO", optionsarray, OPTIONSARRAYLENGTH, true, false);
+
+    if (input == optionsarray[0])
+    {
+        const int ENDPROMTARRAYLENGTH = 3;
+        string endpromptarray[ENDPROMTARRAYLENGTH] = {"Looks Like You Couldn't Withstand LUMS... Sad", "Leaving So Soon...", "Why Did You Even Come Here..."};
+
+        srand(static_cast<unsigned int>(time(0)));
+
+        int randendpromptindex = rand() % ENDPROMTARRAYLENGTH;
+
+        string randendprompt = endpromptarray[randendpromptindex];
+
+        positionText(randendprompt, true, true);
+
+        Sleep(1);
+        
+        exit(0);
+    }
 }
 
 void mainMenu(int state)
@@ -789,11 +1114,7 @@ void mainMenu(int state)
         positionText(menutext3, true, false);
         validateInput(input, "What Do You Want To Do", "Invalid Input. Start Or Exit", inputarray, 2, true, false);
 
-        if (input == inputarray[0])
-        {
-            gameLoop();
-        }
-        else
+        if (input == inputarray[1])
         {
             string goodbyetext = "See You Later. Good Bye";
             positionText(goodbyetext, true, false);
@@ -819,7 +1140,18 @@ void mainMenu(int state)
     }
 }
 
-void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize)
+void displayOptions(string inputarray[], int s)
+{
+    cout << endl;
+    positionText("POSSIBLE OPTIONS", true, false);
+    for (int i = 0; i < s; i++)
+    {
+        cout << "- " << inputarray[i] << endl;
+    }
+
+}
+
+void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize, vector<vector<string>> &locationarray, int locationarraylength)
 {
 
     const int INPUTARRAYLENGTH = 5;
@@ -828,10 +1160,13 @@ void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eater
 
     bool run = true;
 
-    string inputarray[INPUTARRAYLENGTH] = {"LOCATION", "INVENTORY", "STATS", "PAUSE", "END DAY"};
+    string inputarray[INPUTARRAYLENGTH] = {"LOCATION", "INVENTORY", "STATS", "PAUSE", "ENDDAY"};
 
     while (run)
     {
+
+        displayOptions(inputarray, INPUTARRAYLENGTH);
+
         validateInput(input, "What's Your Move", "Invalid Move. What's Your Move", inputarray, INPUTARRAYLENGTH, true, false);
 
         for (int i = 0; i < INPUTARRAYLENGTH; i++)
@@ -850,7 +1185,7 @@ void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eater
             {
                 if (input == inputarray[0])
                 {
-                    inputLocation(player, schoolarray, schoolarraysize, eateryarray, eateryarraysize, timelocationarray, timelocationarraysize, npcarray, npcarraysize);
+                    inputLocation(player, schoolarray, schoolarraysize, eateryarray, eateryarraysize, timelocationarray, timelocationarraysize, npcarray, npcarraysize, locationarray, locationarraylength);
                 }
                 else if (input == inputarray[1])
                 {
@@ -869,9 +1204,8 @@ void takeInput(Player &player, School *schoolarray[], int schoolarraysize, Eater
 
 }
 
-void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize)
+void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize, vector<vector<string>> &locationarray, int locationarraylength)
 {
-    const int INPUTARRAYLENGTH = 6;
 
     string input;
 
@@ -879,34 +1213,25 @@ void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, E
 
     bool printtext = true;
 
-    string inputarray[INPUTARRAYLENGTH][2] = 
-    {
-    {"ENTRANCE", "MAIN"}, 
-    {"SSE", "SCHOOL"}, 
-    {"SDSB", "SCHOOL"},
-    {"PDC", "EATERY"},
-    {"LIBRARY", "TIMELOCATION"},
-    {"BACK", "MAIN"}
-    };
+    vector<string> locationarray1d;
 
-    string inputarray1d[INPUTARRAYLENGTH];
-
-    for (int i = 0; i < INPUTARRAYLENGTH; i++)
+    for (int i = 0; i < locationarraylength; i++)
     {
-        inputarray1d[i] = inputarray[i][0];
+        locationarray1d.push_back(locationarray[i][0]);
     }
-    
 
     while (run)
     {
         printtext = true;
 
-        validateInput(input, "Which Location Do You Want To Go To", "Invalid Location. Which Location Do You Want To Go To", inputarray1d, INPUTARRAYLENGTH, true, false);
+        displayOptions(locationarray1d.data(), locationarraylength);
 
-        for (int i = 0; i < INPUTARRAYLENGTH; i++)
+        validateInput(input, "Which Location Do You Want To Go To", "Invalid Location. Which Location Do You Want To Go To", locationarray1d.data(), locationarraylength, true, false);
+
+        for (int i = 0; i < locationarraylength; i++)
         {
 
-            if (input == inputarray[INPUTARRAYLENGTH - 1][0])
+            if (input == locationarray[locationarraylength - 1][0])
             {
                 run = false;
                 break;
@@ -920,7 +1245,8 @@ void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, E
                     string movingtext = "Moving to " + input;
                     positionText(movingtext, true, false);
                 }
-                if (inputarray[i][1] == "SCHOOL")
+
+                if (locationarray[i][1] == "SCHOOL")
                 {
                     for (int j = 0; j < schoolarraysize; j++)
                     {
@@ -932,7 +1258,7 @@ void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, E
                         }
                     }
                 }
-                else if (inputarray[i][1] == "EATERY")
+                else if (locationarray[i][1] == "EATERY")
                 {
                     for (int j = 0; j < eateryarraysize; j++)
                     {
@@ -944,7 +1270,7 @@ void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, E
                         }
                     }
                 }
-                else if (inputarray[i][1] == "TIMELOCATION")
+                else if (locationarray[i][1] == "TIMELOCATION")
                 {
                     for (int j = 0; j < timelocationarraysize; j++)
                     {
@@ -956,6 +1282,16 @@ void inputLocation(Player &player, School *schoolarray[], int schoolarraysize, E
                         }
                     }
                 }
+                else if (locationarray[i][1] == "MAIN")
+                {
+                    if (input == locationarray[i][0])
+                    {
+                        atMain();
+                        run = false;
+                        break;
+                    }
+                }
+
                 if (!run)
                 {
                     break;
@@ -1016,7 +1352,7 @@ void typeText(const string text, int typedelay, bool nextline)
 
 void positionText(const string text, bool nextline, bool typetext)
 {
-    const int TYPEDELAY = 250;
+    const int TYPEDELAY = 100;
 
     int textLength = text.length();
 
@@ -1042,8 +1378,6 @@ void validateInput(string &input, string prompttext, string invalidprompttext, i
     positionText(prompttext, true, typetext);
 
     bool run = true;
-
-    cin.ignore();
 
     getline(cin, input);
 
@@ -1136,25 +1470,40 @@ void validateInput(string &input, string prompttext, string invalidprompttext, s
 
 }
 
-void gameStart(string game_info[], int s)
+void gameStart(string game_info[], int s, int semesterduration)
 {
     string name;
     string gender;
     string school;
+    
+    const int GENDERVALIDATIONARRAYLENGTH = 2;
+    string gendervalidationarray[GENDERVALIDATIONARRAYLENGTH] = {"MALE", "FEMALE"};
 
-    string gendervalidation[2] = {"MALE", "FEMALE"};
-    string schoolvalidation[3] = {"SSE", "SDSB", "HSS"};
+    const int SCHOOLVALIDATIONARRAYLENGTH = 2;
+    string schoolvalidationarray[SCHOOLVALIDATIONARRAYLENGTH] = {"SSE", "SDSB"};
 
     const int NAMEMIN = 2;
     const int NAMEMAX = 10;
 
-    const int TYPETEXT = false;
+    const int TYPETEXT = true;
 
-    positionText("Welcome to LUMS Student Life Simulator", true, TYPETEXT);
+    string titletext = "WELCOME TO LUMS STUDENT LIFE SIMULATOR";
+    string infotext = "Your Goal Is To Survive " + to_string(semesterduration) + " Days With a GPA of 3.7 and a Social Factor of 3";
+
+    int titletextlength = titletext.length();
+
+    int spaces = (getConsoleWidth() - titletextlength) / 2;
+
+    for (int i = 0; i < spaces; i++)
+    {
+        cout << ' ';
+    }
+
+    positionText("WELCOME TO LUMS STUDENT LIFE SIMULATOR", true, TYPETEXT);
 
     cout << endl;
 
-    positionText("Design Your Player", true, TYPETEXT);
+    positionText(infotext, true, TYPETEXT);
 
     cout << endl;
 
@@ -1162,15 +1511,25 @@ void gameStart(string game_info[], int s)
 
     validateInput(name, "What Is Your Name", nameinvalidprompttext, NAMEMIN, NAMEMAX, TYPETEXT);
 
-    validateInput(gender, "What is Your Gender", "The Chosen Gender Must Either be Male, Or Female", gendervalidation, 2, true, TYPETEXT);
+    positionText("What Is Your Gender", true, TYPETEXT);
 
-    validateInput(school, "Choose Your School", "The Chosen School Must Either be SSE, SDSB, OR HSS", schoolvalidation, 3, true, TYPETEXT);
+    displayOptions(gendervalidationarray, GENDERVALIDATIONARRAYLENGTH);
+
+    validateInput(gender, "", "The Chosen Gender Must Either Be Male, Or Female", gendervalidationarray, GENDERVALIDATIONARRAYLENGTH, true, false);
+
+    positionText("Choose Your School", true, TYPETEXT);
+
+    displayOptions(schoolvalidationarray, SCHOOLVALIDATIONARRAYLENGTH);
+
+    validateInput(school, "", "The Chosen School Must Either Be SSE, Or SDSB", schoolvalidationarray, SCHOOLVALIDATIONARRAYLENGTH, true, false);
+
+    cout << endl;
 
     game_info[0] = name;
     game_info[1] = gender;
     game_info[2] = school;
 
-    int schoolindex = schoolvalidation->find(school);
+    int schoolindex = schoolvalidationarray->find(school);
 
     game_info[3] = to_string(schoolindex);
 
@@ -1211,7 +1570,7 @@ void initializeSchool(string schoolname, School *schoolarray[], int s)
 
     positionText(scheduletext1, true, false);
 
-    schoolarray[schoolindex]->printCourses();
+    schoolarray[schoolindex]->printCourses(false);
 
     validateInput(input1, "Which Course Do You Want At Position 1", "Invalid Course. Which Course Do You Want At Position 1", schoolarray[schoolindex]->getCourseArray().data(), schoolarray[schoolindex]->getCourseArray().size(), true, false);
 
@@ -1231,7 +1590,7 @@ void initializeSchool(string schoolname, School *schoolarray[], int s)
 
     positionText(scheduletext2, true, false);
 
-    schoolarray[schoolindex]->printCourses();
+    schoolarray[schoolindex]->printCourses(true);
 
 }
 
@@ -1239,22 +1598,147 @@ void initializeEatery(Eatery *eateryarray[], int s)
 {
     for (int i = 0; i < s; i++)
     {
-        if (eateryarray[i]->getName() == "PDC")
+        if (eateryarray[i] -> getName() == "PDC")
         {
-            eateryarray[i] -> addMenuItem("BIRYANI", "500");
+            eateryarray[i] -> addMenuItem("BIRYANI", "200");
 
-            eateryarray[i] -> addMenuItem("WAFFLE", "190");
+            eateryarray[i] -> addMenuItem("PULAO", "175");
 
-            eateryarray[i] -> addMenuItem("PARATHA", "300");
+            eateryarray[i] -> addMenuItem("CHICKENTIKKA", "300");
+        }
 
+        if (eateryarray[i] -> getName() == "JJ")
+        {
+            eateryarray[i] -> addMenuItem("BURGER", "500");
+
+            eateryarray[i] -> addMenuItem("SANDWHICH", "250");
+
+            eateryarray[i] -> addMenuItem("PASTA", "325");
+        }
+
+        if (eateryarray[i] -> getName() == "BAITHAK")
+        {
+            eateryarray[i] -> addMenuItem("ALOOPARATHA", "200");
+
+            eateryarray[i] -> addMenuItem("ANDASHAMI", "250");
+
+            eateryarray[i] -> addMenuItem("KULFI", "100");
+        }
+
+        if (eateryarray[i] -> getName() == "GREENOLIVE")
+        {
+            eateryarray[i] -> addMenuItem("FALAFEL", "200");
+
+            eateryarray[i] -> addMenuItem("GYRORICE", "250");
+
+            eateryarray[i] -> addMenuItem("SHAWARMA", "200");
         }
 
     }
 }
 
-void gameLoop()
+void playLoopingSound(const std::wstring& soundfile)
 {
-    const int SEMESTERDURATION = 10;
+    PlaySoundW(soundfile.c_str(), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+}
+
+void stopSound()
+{
+    PlaySound(NULL, 0, 0);
+}
+
+void inititializeClasses(int semsterduration)
+{
+    string game_info[4];
+
+    gameStart(game_info, 4, semsterduration);
+    
+    thread soundThread(playLoopingSound, L"music.wav");
+
+    Player player = Player(game_info[0], game_info[1], game_info[2], stoi(game_info[3]));
+
+    School sse = School("SSE", 0);
+    School sdsb = School("SDSB", 1);
+
+    const int SCHOOLARRAYLENGTH = 2;
+    School *schoolarray[SCHOOLARRAYLENGTH] = {&sse, &sdsb};
+
+    initializeSchool(game_info[2], schoolarray, SCHOOLARRAYLENGTH);
+
+    Eatery pdc = Eatery("PDC", 2);
+
+    Eatery jj = Eatery("JJ", 3);
+
+    Eatery baithak = Eatery("BAITHAK", 4);
+
+    Eatery greenolive = Eatery("GREENOLIVE", 5);
+
+    const int EATERYARRAYLENGTH = 3;
+    Eatery *eateryarray[EATERYARRAYLENGTH] = {&pdc, &jj, &baithak};
+
+    initializeEatery(eateryarray, EATERYARRAYLENGTH);
+
+    TimeLocation library = TimeLocation("LIBRARY", 6);
+
+    const int TIMELOCATIONARRAYLENGTH = 1;
+
+    TimeLocation *timelocationarray[TIMELOCATIONARRAYLENGTH] = {&library};
+
+    srand(static_cast<unsigned int>(time(0)));
+
+    int randomtime = rand() % 6 + 9;
+
+    // cout << "Random Time " << randomtime << endl;
+
+    NPC ahmed = NPC("AHMED", randomtime);
+
+    NPC ali = NPC("ALI", randomtime + 3);
+
+    NPC ayaan = NPC("AYAAN", randomtime + 6);
+
+    const int NPCARRAYLENGTH = 3;
+
+    NPC *npcarray[NPCARRAYLENGTH] = {&ahmed, &ali, &ayaan};
+
+    const int LOCATIONARRAYLENGTH = 10;
+
+    vector<vector<string>> locationarray = 
+    {
+    {"ENTRANCE", "MAIN"}, 
+    {"SSE", "SCHOOL"}, 
+    {"SDSB", "SCHOOL"},
+    {"PDC", "EATERY"},
+    {"JJ", "EATERY"},
+    {"BAITHAK", "EATERY"},
+    {"GREENOLIVE", "EATERY"},
+    {"LIBRARY", "TIMELOCATION"},
+    {"EXIT", "MAIN"},
+    {"BACK", "MAIN"}
+    };
+
+    vector<string> locationarray1d;
+
+    for (int i = 0; i < LOCATIONARRAYLENGTH; i++)
+    {
+        locationarray1d.push_back(locationarray[i][0]);
+    }
+
+    MainWindow mainwindow(player, schoolarray, SCHOOLARRAYLENGTH, eateryarray, EATERYARRAYLENGTH, library, npcarray, NPCARRAYLENGTH);
+
+    mainwindow.setLocationArray(locationarray1d.data(), LOCATIONARRAYLENGTH);
+
+    mainwindow.createMap();
+
+    thread gameThread(gameLoop, ref(player), schoolarray, SCHOOLARRAYLENGTH, eateryarray, EATERYARRAYLENGTH, timelocationarray, TIMELOCATIONARRAYLENGTH, npcarray, NPCARRAYLENGTH, ref(locationarray), LOCATIONARRAYLENGTH, ref(mainwindow), semsterduration);
+
+    mainwindow.run();
+
+    gameThread.join();
+
+}
+
+void gameLoop(Player &player, School *schoolarray[], int schoolarraysize, Eatery *eateryarray[], int eateryarraysize, TimeLocation *timelocationarray[], int timelocationarraysize, NPC *npcarray[], int npcarraysize, vector<vector<string>> &locationarray, int locationarraylength, MainWindow &mainwindow, const int SEMESTERDURATION)
+{
 
     const int OPTIONSARRAYLENGTH = 2;
 
@@ -1264,48 +1748,14 @@ void gameLoop()
 
     bool run = true;
 
+    bool won = false;
+
     string input;
+
+    mainMenu(0);
 
     while (run)
     {
-        string game_info[4];
-
-        // string game_info[4] = {"Zyan", "Male", "SSE", "0"}; 
-
-        gameStart(game_info, 4);
-
-        Player player = Player(game_info[0], game_info[1], game_info[2], stoi(game_info[3]));
-
-        School sse = School("SSE", 0);
-        School sdsb = School("SDSB", 1);
-
-        School *schoolarray[2] = {&sse, &sdsb};
-
-        initializeSchool(game_info[2], schoolarray, 2);
-
-        Eatery pdc = Eatery("PDC", 2);
-
-        Eatery *eateryarray[1] = {&pdc};
-
-        initializeEatery(eateryarray, 1);
-
-        TimeLocation library = TimeLocation("LIBRARY", 3);
-
-        TimeLocation *timelocationarray[1] = {&library};
-
-        srand(static_cast<unsigned int>(time(0)));
-
-        int randomtime = rand() % 6 + 9;
-
-        // cout << "Random Time " << randomtime << endl;
-
-        NPC ahmed = NPC("AHMED", randomtime);
-
-        NPC ali = NPC("ALI", randomtime + 3);
-
-        NPC ayaan = NPC("AYAAN", randomtime + 6);
-
-        NPC *npcarray[3] = {&ahmed, &ali, &ayaan};
 
         for (int i = 1; i <= SEMESTERDURATION; i++)
         {
@@ -1350,7 +1800,7 @@ void gameLoop()
 
             player.printStats();
         
-            takeInput(player, schoolarray, 2, eateryarray, 1, timelocationarray, 1, npcarray, 3);
+            takeInput(player, schoolarray, schoolarraysize, eateryarray, eateryarraysize, timelocationarray, timelocationarraysize, npcarray, npcarraysize, locationarray, locationarraylength);
 
             player.printClassesTaken();
 
@@ -1384,31 +1834,59 @@ void gameLoop()
 
             player.setGPA(player.getGPA() - player.getStudyLoss());
 
+            player.setStudyLoss(0);
+
             player.removeClassesTaken();
+
+            if (i == SEMESTERDURATION && player.getGPA() >= 3.7 && player.getSocial() >= 3)
+            {
+                won = true;
+            }
 
             resetConsoleColor();
 
         }
 
-        validateInput(input, "Do You Want to Retry", "Invalid Input. Do You Want To Retry", optionsarray, OPTIONSARRAYLENGTH, true, false);
-
-        if (input == optionsarray[1])
+        if (!won)
         {
-            run = false;
-        }
 
+            positionText("You Failed!!!", true, true);
+            validateInput(input, "Do You Want to Retry", "Invalid Input. Do You Want To Retry", optionsarray, OPTIONSARRAYLENGTH, true, false);
+
+            if (input == optionsarray[1])
+            {
+                string goodbyetext = "See You Later. Good Bye";
+                positionText(goodbyetext, true, false);
+                Sleep(1000);
+                exit(0);
+            }
+            else
+            {
+                mainwindow.stop();
+                inititializeClasses(SEMESTERDURATION);
+            }
+
+        }
+        else
+        {
+            positionText("Congratulations!!! You Won!!!", true, true);
+            positionText("Thanks For Playing!!!", true, true);
+            Sleep(1);
+            exit(0);
+        }
     }
 
 }
 
 int main()
 {
+
+    const int SEMESTERDURATION = 5;
+
     resetConsoleColor();
 
-    mainMenu(0);
+    inititializeClasses(SEMESTERDURATION);
 
-    // gameStart(game_info, 3);
-
-    // pdc.atEatery(player);
+    return 0;
 
 }
